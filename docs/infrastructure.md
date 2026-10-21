@@ -25,6 +25,8 @@ Microsoft Graph
 
 No VPS, container, database server, object storage or paid third-party service is used.
 
+**Deployment shapes (ADR-020):** the diagram shows the two-project setup (Pages + API Worker). Alternatively the root `wrangler.toml` deploys a single Worker, `chat360pm`, that serves the same SPA as static assets and runs the same API code for `/api/*`; this is what a Git-connected Workers Build uses.
+
 ## Components
 
 | Component         | Implementation                                                                                     | Status                                                          |

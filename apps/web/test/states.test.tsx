@@ -210,3 +210,28 @@ describe('api client', () => {
     });
   });
 });
+
+describe('unconfigured deployment', () => {
+  it('tells the user setup is incomplete instead of offering a broken sign-in', async () => {
+    mockFetch({
+      '/api/me': { status: 503, body: { error: { code: 'service_misconfigured', message: 'x' } } },
+      '/api/auth/config': {
+        status: 503,
+        body: { error: { code: 'service_misconfigured', message: 'x' } },
+      },
+    });
+    render(
+      <MemoryRouter initialEntries={['/login']}>
+        <SessionProvider>
+          <ToastProvider>
+            <AppRoutes />
+          </ToastProvider>
+        </SessionProvider>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText(/not fully set up yet/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: /Sign in with your Chat360 Microsoft account/ }),
+    ).not.toBeInTheDocument();
+  });
+});

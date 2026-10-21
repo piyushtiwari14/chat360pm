@@ -29,6 +29,7 @@ Rules:
 | ADR-017 | Account deactivation semantics                                                      | Accepted               |
 | ADR-018 | In-memory adapters and developer sign-in for local development only                 | Accepted               |
 | ADR-019 | Project finance: app record + seventh "Finance" tracker sheet                       | Accepted               |
+| ADR-020 | Single-Worker deployment option (Workers static assets) for Git-connected builds    | Accepted               |
 
 ---
 
@@ -237,3 +238,15 @@ Rules:
 - **Trade-offs/risks:** The tracker is readable by everyone with access to the project folder, so **the Finance sheet is visible to anyone who can open the workbook**, including technical staff. If that is not acceptable, the follow-up is to write finance to a separate restricted workbook (PRD-FIN-007). Excel sheet protection is not a confidentiality control and was not used.
 - **Affected:** `packages/core/src/finance.ts`, `rbac.ts`, `schemas.ts`, `analytics.ts`, `transfer.ts`, `workbook/*`; `apps/api/src/routes/projects.ts`, `routes/project-helpers.ts`, `services/workbook.ts`, `graph/workbook.ts`; `apps/web/src/components/FinanceTab.tsx`; `docs/prd.md` (PRD-FIN-\*), `docs/product.md`, `docs/api_guidelines.md`, `docs/security.md`.
 - **Validation performed:** core tests (totals, permissions, validation, stale edits, Excel row and formula, handover); API tests (edit rights, 422/403, redaction for tech staff incl. audit and transfer snapshot, analytics per currency, Excel sync, old workbook without Finance); Graph contract test (missing table 404 skipped, 500 still fails); Playwright e2e (Sales POC edits, Tech cannot see the tab); sample workbook opened in openpyxl and LibreOffice, which computed Total correctly. **Pending:** Excel for the web in the Chat360 tenant; Chat360 confirmation of the Total definition and of who may see finance.
+
+## ADR-020 — Single-Worker deployment option (Workers static assets) for Git-connected builds
+
+- **Date:** 2026-10-21
+- **Status:** Accepted. Adds a deployment option; does not supersede ADR-002 (the Pages + Worker setup still works).
+- **Context:** Chat360 connected the repository to a Cloudflare **Worker** with Workers Builds (root directory `/`, deploy command `npx wrangler deploy`). The repo had no root Wrangler config, so the build's deploy step failed.
+- **Decision:** Add a root `wrangler.toml` defining one Worker, `chat360pm`, that serves the built web app as **static assets** (`apps/web/dist`, single-page-application fallback, `_headers` honoured) and runs the API only for `/api/*` (`run_worker_first`). A `[build]` command builds the web app before each deploy, so the dashboard build command can stay empty. Only fail-closed constants are in `[vars]`; tenant values and secrets are set in the dashboard and preserved by `keep_vars = true`.
+- **Reasoning:** Matches how the project was connected in Cloudflare; one link and one deployment; same origin without a Pages Function; Cloudflare recommends static assets on Workers for new projects.
+- **Alternatives:** change the dashboard to deploy only `apps/api` (website would still need a separate Pages project); keep Pages only (requires a second Cloudflare project and a service binding).
+- **Trade-offs/risks:** The Worker name in `wrangler.toml` must match the Worker connected in the dashboard (`chat360pm`). Two configs (root and `apps/api`) define the same Worker code; keep their bindings and crons in step.
+- **Bug found and fixed while validating:** the API reused one Durable Object stub, one in-flight token fetch and one remote JWKS loader across requests. Workers reject I/O objects created during a different request, so **every sign-in failed** with a 500 in `workerd`. Stubs are now obtained per call, the app-token cache stores only the token string, and the JWKS loader is created per verification.
+- **Validation:** `wrangler deploy --dry-run` with the custom build; `wrangler dev` of the root config: `/`, deep links and `/login` serve the app with the CSP header; `/api/health` returns 503 `service_misconfigured` without settings and 200 with settings; repeated `/api/auth/login` requests redirect to Microsoft (previously 500); client error reporting works. **Pending:** the real Workers Build in Chat360's Cloudflare account.

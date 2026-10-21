@@ -161,12 +161,20 @@ export class Coordinator extends DurableObject<Env> {
 
 type Stub = DurableObjectStub<Coordinator>;
 
-export function coordinatorStub(ns: DurableObjectNamespace<Coordinator>): Stub {
-  return ns.get(ns.idFromName('global'));
+/**
+ * Returns a factory, not a stub: Workers forbid using an I/O object (a Durable Object stub)
+ * created while handling one request from another request, and these adapters live for the
+ * whole isolate. Getting a stub is cheap; the object id is stable.
+ */
+export function coordinatorStub(ns: DurableObjectNamespace<Coordinator>): () => Stub {
+  return () => ns.get(ns.idFromName('global'));
 }
 
 export class DurableSessionStore implements SessionStore {
-  constructor(private readonly stub: Stub) {}
+  constructor(private readonly getStub: () => Stub) {}
+  private get stub() {
+    return this.getStub();
+  }
   async create(r: SessionRecord) {
     await this.stub.sessionCreate(r);
   }
@@ -188,7 +196,10 @@ export class DurableSessionStore implements SessionStore {
 }
 
 export class DurableCoordination implements Coordination {
-  constructor(private readonly stub: Stub) {}
+  constructor(private readonly getStub: () => Stub) {}
+  private get stub() {
+    return this.getStub();
+  }
   rateLimit(key: string, limit: number, windowSeconds: number) {
     return this.stub.rateLimit(key, limit, windowSeconds);
   }

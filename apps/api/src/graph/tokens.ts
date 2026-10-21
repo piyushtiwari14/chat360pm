@@ -15,12 +15,12 @@ export function appTokenProvider(
   fetchImpl: FetchLike = (i, init) => fetch(i, init),
   now: () => number = Date.now,
 ) {
+  // Only the token string is shared across requests. An in-flight fetch promise must not be:
+  // Workers reject I/O started by one request being awaited from another.
   let cached: CachedToken | null = null;
-  let inflight: Promise<string> | null = null;
   return async (): Promise<string> => {
     if (cached && cached.expiresAt - 300_000 > now()) return cached.token;
-    if (inflight) return inflight;
-    inflight = (async () => {
+    {
       const res = await fetchImpl(
         `https://login.microsoftonline.com/${entra.tenantId}/oauth2/v2.0/token`,
         {
@@ -49,9 +49,6 @@ export function appTokenProvider(
       }
       cached = { token: body.access_token, expiresAt: now() + (body.expires_in ?? 3600) * 1000 };
       return cached.token;
-    })().finally(() => {
-      inflight = null;
-    });
-    return inflight;
+    }
   };
 }

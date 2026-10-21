@@ -56,7 +56,10 @@ export function createOidcClient(opts: {
   const authority = `https://login.microsoftonline.com/${opts.tenantId}`;
   const issuer = `${authority}/v2.0`;
   const fetchImpl = opts.fetch ?? ((i, init) => fetch(i, init));
-  const jwks = opts.jwks ?? createRemoteJWKSet(new URL(`${authority}/discovery/v2.0/keys`));
+  const jwksUrl = new URL(`${authority}/discovery/v2.0/keys`);
+  // A remote JWKS set caches its pending download, which must not be shared across Worker
+  // requests, so one is created per verification (sign-ins are infrequent).
+  const jwksFor = () => opts.jwks ?? createRemoteJWKSet(jwksUrl);
   const now = opts.now ?? Date.now;
 
   async function token(params: Record<string, string>): Promise<TokenSet> {
@@ -126,7 +129,7 @@ export function createOidcClient(opts: {
     async verifyIdToken(idToken, nonce) {
       let payload: JWTPayload;
       try {
-        ({ payload } = await jwtVerify(idToken, jwks, {
+        ({ payload } = await jwtVerify(idToken, jwksFor(), {
           issuer,
           audience: opts.clientId,
           algorithms: ['RS256'],

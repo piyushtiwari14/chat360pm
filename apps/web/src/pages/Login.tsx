@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router';
-import { api, loginUrl, post } from '../lib/api';
+import { api, ApiError, loginUrl, post } from '../lib/api';
 import { useSession } from '../lib/session';
 import { Button, InlineError, Spinner } from '../components/ui';
 import { useAction } from '../lib/hooks';
@@ -23,6 +23,7 @@ export function LoginPage() {
   const { status, refresh } = useSession();
   const returnTo = params.get('returnTo') ?? '/';
   const [config, setConfig] = useState<{ devAuth: boolean; entraConfigured: boolean } | null>(null);
+  const [unconfigured, setUnconfigured] = useState(false);
   const [devUsers, setDevUsers] = useState<{ id: string; displayName: string; roles: string[] }[]>(
     [],
   );
@@ -39,7 +40,14 @@ export function LoginPage() {
         if (c.devAuth)
           setDevUsers((await api<{ users: typeof devUsers }>('/api/auth/dev-users')).users);
       })
-      .catch(() => setConfig({ devAuth: false, entraConfigured: true }));
+      .catch((e: unknown) => {
+        // A misconfigured server answers 503; say so instead of offering a sign-in that fails.
+        if (e instanceof ApiError && e.code === 'service_misconfigured') setUnconfigured(true);
+        setConfig({
+          devAuth: false,
+          entraConfigured: !(e instanceof ApiError && e.code === 'service_misconfigured'),
+        });
+      });
   }, []);
 
   if (status === 'authenticated')
@@ -69,6 +77,12 @@ export function LoginPage() {
             {ERRORS[error] ?? ERRORS.signin_failed}
           </p>
         )}
+        {unconfigured && (
+          <p className="inline-error" role="alert">
+            The service is not fully set up yet: an administrator still needs to add the Microsoft
+            365 and security settings in Cloudflare.
+          </p>
+        )}
         {!config ? (
           <Spinner label="Loading sign-in options…" />
         ) : (
@@ -78,7 +92,8 @@ export function LoginPage() {
                 Sign in with your Chat360 Microsoft account
               </a>
             ) : (
-              !config.devAuth && (
+              !config.devAuth &&
+              !unconfigured && (
                 <p className="inline-error">
                   Microsoft sign-in is not configured for this environment.
                 </p>

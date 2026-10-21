@@ -81,7 +81,37 @@ Web: `RELEASE` at build time (shown in crash reports). The Pages project needs t
    ```
 7. Record the bootstrap admins' object ids in `BOOTSTRAP_ADMIN_OIDS`.
 
-## Cloudflare setup (pending)
+## Option A — one Worker connected to GitHub (Workers Builds)
+
+This is the setup Chat360 started in the Cloudflare dashboard. The root `wrangler.toml` defines a Worker named **`chat360pm`** that serves the website and the API on one link (ADR-020).
+
+1. **Workers & Pages → `chat360pm` → Settings → Build:**
+   - Git repository: the repository and branch you deploy from (`main`).
+   - Root directory: `/`.
+   - Build command: leave empty (`wrangler.toml` builds the web app itself).
+   - Deploy command: `npx wrangler deploy`.
+2. **Settings → Variables and Secrets** (Production):
+
+   | Name                   | Type       | Value                                                                                                             |
+   | ---------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------- |
+   | `APP_ORIGIN`           | Text       | Your Worker URL, e.g. `https://chat360pm.<your-subdomain>.workers.dev` (no trailing slash), or your custom domain |
+   | `ENTRA_TENANT_ID`      | Text       | Tenant ID                                                                                                         |
+   | `ENTRA_CLIENT_ID`      | Text       | App registration client ID                                                                                        |
+   | `GRAPH_DRIVE_ID`       | Text       | Drive ID of the approved SharePoint library                                                                       |
+   | `BOOTSTRAP_ADMIN_OIDS` | Text       | Object ID(s) of the first administrator(s)                                                                        |
+   | `NOTIFICATION_MAILBOX` | Text       | Optional; shared mailbox address for notifications                                                                |
+   | `ENTRA_CLIENT_SECRET`  | **Secret** | Client secret value                                                                                               |
+   | `TOKEN_ENCRYPTION_KEY` | **Secret** | `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`                                     |
+   | `COOKIE_SECRET`        | **Secret** | Run the same command again (a different value)                                                                    |
+
+   `keep_vars = true` in `wrangler.toml` keeps these when the next build deploys.
+
+3. In Entra, the redirect URI must be `<APP_ORIGIN>/api/auth/callback`.
+4. **Deployments → Retry build** (or push to `main`). Then open `<APP_ORIGIN>/api/health`: `{"status":"ok"}` means configured; `503 service_misconfigured` means a setting is missing. **Observability → Logs** shows a `configuration_error` line listing exactly which.
+
+Until step 2 is done the site loads and its sign-in page says setup is incomplete; that is expected.
+
+## Option B — separate API Worker and Pages project (pending)
 
 ```bash
 cd apps/api

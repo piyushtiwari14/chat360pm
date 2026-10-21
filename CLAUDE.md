@@ -26,6 +26,7 @@ apps/api        Hono Worker: routes, auth (Entra OIDC), Graph adapters, Coordina
 apps/web        React SPA (Vite), Pages Function proxy in functions/, Playwright e2e in e2e/
 docs            the eight mandatory documents + screenshots
 scripts         workbook validation (Python/openpyxl/LibreOffice)
+wrangler.toml   single-Worker deployment (website as static assets + API), used by Workers Builds (ADR-020)
 ```
 
 ## Commands
@@ -39,6 +40,7 @@ scripts         workbook validation (Python/openpyxl/LibreOffice)
 - Creates take an `Idempotency-Key`; state-changing requests need `X-Requested-With: chat360` (the web `api()` helper does this).
 - Every UI data view needs loading, empty, error and permission-aware states (`docs/design_system.md`).
 - Tests: domain rules in `packages/core/test`; HTTP behaviour in `apps/api/test` using `dev/memory-deps.ts`; Graph request shapes in `apps/api/test/graph.test.ts`. In-memory tests do not verify Microsoft integration — say so.
+- Worker code must not reuse request-scoped I/O across requests (Durable Object stubs, in-flight fetch promises): Workers reject it. Verify runtime changes with `wrangler dev`, not only Node tests.
 - Never commit secrets, `.dev.vars`, or real employee/client names or emails. Demo data must stay fictional.
 
 ## Maintaining docs and decisions

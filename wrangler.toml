@@ -1,0 +1,52 @@
+# Single-Worker deployment used by Cloudflare Workers Builds (Git-connected, root directory "/").
+# One Worker serves the web app as static assets and runs the API for /api/* (ADR-020).
+# The two-project setup (apps/api Worker + apps/web Pages) remains available; see docs/deployment.md.
+#
+# Tenant-specific values are NOT stored here. Set them in the Cloudflare dashboard
+# (Worker → Settings → Variables and Secrets); `keep_vars` stops deploys from erasing them:
+#   APP_ORIGIN, ENTRA_TENANT_ID, ENTRA_CLIENT_ID, GRAPH_DRIVE_ID, BOOTSTRAP_ADMIN_OIDS,
+#   NOTIFICATION_MAILBOX (optional)
+#   Secrets: ENTRA_CLIENT_SECRET, TOKEN_ENCRYPTION_KEY, COOKIE_SECRET
+name = "chat360pm"
+main = "apps/api/src/index.ts"
+compatibility_date = "2025-10-01"
+workers_dev = true
+keep_vars = true
+
+# Builds the web app before every deploy, so the dashboard build command can stay empty.
+[build]
+command = "pnpm --filter @chat360/web build"
+
+[assets]
+directory = "apps/web/dist"
+not_found_handling = "single-page-application"
+# Only API calls reach the Worker code; everything else is served from the built web app.
+run_worker_first = ["/api/*"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+# UTC; defaults assume Asia/Kolkata (see apps/api/wrangler.toml for the schedule meaning).
+[triggers]
+crons = ["30 3 * * *", "30 13 * * *", "15 * * * *"]
+
+[[durable_objects.bindings]]
+name = "COORDINATOR"
+class_name = "Coordinator"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Coordinator"]
+
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "chat360_ops_events"
+
+# Safe constants only. They fail closed: no developer sign-in, no in-memory storage.
+[vars]
+ENVIRONMENT = "production"
+STORAGE_BACKEND = "graph"
+DEV_AUTH = "disabled"
+ALLOWED_EMAIL_DOMAINS = "chat.io"
+ONEDRIVE_ROOT_PATH = "Chat360 Project Operations"
